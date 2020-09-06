@@ -22,7 +22,7 @@ fun main() {
 }
 
 fun String.lineToIntList(): List<Int> {
-    return this.split(" ").map { it.toInt() }
+    val list = this.split(" ").map { it.toInt() }
 }
 fun List<Int>.listAdd(): Int {
     return this.fold(0) { acc, it -> acc + it }
