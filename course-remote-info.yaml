@@ -24,10 +24,10 @@ stages:
   is_completed: true
 - id: 492
   step: 7815
-  is_completed: false
+  is_completed: true
 - id: 493
   step: 7816
-  is_completed: false
+  is_completed: true
 topics:
   0:
   - title: Units of information

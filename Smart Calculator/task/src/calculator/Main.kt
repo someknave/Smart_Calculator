@@ -1,7 +1,52 @@
 
 package calculator
 
+import java.math.BigInteger
 import java.util.*
+
+class Stack(size:Int){
+    private var stackSize = size
+    private var stackArr = Array(stackSize) {""}
+    private var top = -1
+
+    fun push(entry: String) {
+        if (this.isStackFull()) {
+            this.increaseStackCapacity()
+        }
+        top += 1
+        this.stackArr[top] = entry
+    }
+    fun pop(): String? {
+        if (this.isStackEmpty()) {
+            println("Stack empty")
+            return null
+        }
+        val out =stackArr[top]
+        top--
+        return out
+    }
+    fun size(): Int {
+        return top + 1
+    }
+    fun peek(): String {
+        return stackArr.getOrNull(top).toString()
+    }
+    private fun increaseStackCapacity() {
+        val newStack = Array(this.stackSize * 2) {""}
+        for (i in 0 until stackSize) {
+            newStack[i] = this.stackArr[i]
+        }
+        this.stackArr = newStack
+        this.stackSize = this.stackSize * 2
+        return
+    }
+    fun isStackEmpty(): Boolean {
+        return top == - 1
+    }
+    private fun isStackFull(): Boolean {
+        return top == stackSize - 1
+    }
+}
 
 fun main() {
     val scanner = Scanner(System.`in`)
@@ -12,7 +57,7 @@ fun main() {
     }
 }
 
-val variables = mutableMapOf<String, Int>()
+val variables = mutableMapOf<String, BigInteger>()
 
 fun String?.parse(): Boolean {
     if (this.isNullOrEmpty()) return true
@@ -20,49 +65,78 @@ fun String?.parse(): Boolean {
     return try {
         this.lineToEquation().solve()
     } catch (e: IllegalArgumentException) {
-        println("Invalid expresion")
+        println("Invalid Expression")
         true
     }
 }
 
 fun String.command(): Boolean {
-    when (this) {
-        "/exit" -> { println("Bye!"); return false }
-        "/help" -> { println("The program calculates addition and subtraction. Use + and - signs between digits"); return true }
-        else -> { println("Unknown command"); return true }
+    return when (this) {
+        "/exit" -> { println("Bye!"); false
+        }
+        "/help" -> { println("The program calculates addition and subtraction. Use + and - signs between digits"); true
+        }
+        else -> { println("Unknown command"); true
+        }
     }
 }
 
-fun String.lineToEquation(): List<Pair<String, Char>> {
+fun String.lineToEquation(): List<String> {
     val punct = Regex("\\p{Punct}")
     val spaced = punct.replace(this) { " ${it.value} " }
     val list = spaced.split(Regex("\\s"))
-    val output = mutableListOf<Pair<String, Char>>()
+    val output = mutableListOf<String>()
     var negative = false
-    var operation = '#'
-    var num = ""
+    var operation = false
+    val stack = Stack(6)
     loop@ for (word in list) {
-        when (word) {
-            "" -> continue@loop
-            "+" -> if (num != "") operation = '+'
-            "-" -> {
-                negative = !negative
-                if (operation == '#' && num != "") operation = '+'
+        when {
+            word == "" -> continue@loop
+            !operation && word in "*/=^)" -> throw IllegalArgumentException("")
+            !operation && word == "-" -> negative = !negative
+            !operation && word == "+" -> if (stack.peek() != "+") throw IllegalArgumentException("")
+            !operation && word == "(" -> {
+                if (negative) {output.add("-1"); stack.push("*"); negative=false }
+                stack.push("(")
             }
-            "=" -> if (num != "") {operation = '='} else throw IllegalArgumentException("")
-            else -> {
-                if (num != "") {
-                    if (operation == '#') throw IllegalArgumentException("")
-                    output.add(num to operation)
+            !operation && !negative -> {output.add(word); operation = true}
+            !operation -> {output.add("-$word"); operation = true; negative = false}
+            word == "^" -> {
+                if (stack.peek() == "^") {output.add(stack.pop()!!)}
+                stack.push("^")
+                operation = false
+            }
+            word in "*/" -> {
+                while (stack.peek() in "^*/") {output.add(stack.pop()!!)}
+                stack.push(word)
+                operation = false
+            }
+            word in "+-" -> {
+                if (word == "-") negative = !negative
+                while (stack.peek() in "^*/+") {output.add(stack.pop()!!)}
+                stack.push("+")
+                operation = false
+            }
+            word == "=" -> {
+                while (stack.peek() in "^*/+") {output.add(stack.pop()!!)}
+                stack.push("=")
+                operation = false
+            }
+            word == ")" -> {
+                while (stack.peek() in "^*/+") {
+                    output.add(stack.pop()!!)
                 }
-                num = if (negative) "-$word" else word
-                negative = false
-                operation = '#'
+                if (stack.peek() != "(") {
+                    println("Invalid parenthesis")
+                    return emptyList()
+                }
+                stack.pop()
+
             }
+            else -> throw IllegalArgumentException("")
         }
     }
-    if (operation != '#') throw IllegalArgumentException("")
-    output.add(num to ' ')
+    while(stack.size() > 0) output.add(stack.pop()!!)
     return output
 }
 fun String.isVarName(): Boolean {
@@ -71,32 +145,60 @@ fun String.isVarName(): Boolean {
     }
 }
 
-fun List<Pair<String, Char>>.solve(): Boolean {
-    var assign = ""
-    var ans = 0
-    var operator = '+'
-    loop@ for (i in this.indices) {
-        if (this[i].second == '=') {
-            when {
-                i > 0 -> { println("Invalid assignment"); return true}
-                this[i].first.isVarName() -> { assign = this[i].first; continue@loop }
-                else -> { println("Invalid identifier"); return true }
-            }
+fun List<String>.solve(): Boolean {
+    val stack = Stack(10)
+    for (i in this.indices) {
+        if (this[i] == "=" && i != this.size-1) {
+            println("Invalid assignment")
+            return true
         }
-        var new = this[i].first
-        var sign = 1
-        if (new[0] == '-') { sign = -1; new = new.drop(1) }
-        when {
-            new in variables.keys && operator == '+' -> { ans += sign * variables[new]!!}
-            new.isVarName() -> { println("Unknown variable"); return true }
-            new.any {it in 'a'..'z'|| it in 'A'..'Z'} -> { println("Invalid variable"); return true }
-            else -> ans +=  new.toIntOrNull()?.times(sign)?: throw IllegalArgumentException("")
-        }
-        operator = this[i].second
+        if (this[i] in "=+*/^") {
+            val b = stack.pop()?:return true
+            val a = stack.pop()?:return true
+            val ans = this[i].binaryOperation(a, b) ?: return true
+            stack.push(ans.toString())
+        } else stack.push(this[i])
     }
-    if (assign == "") {println(ans); return true}
-    variables[assign] = ans
+    if (stack.isStackEmpty()) return true
+    val output = stack.pop()?.toVariableOrInt()
+    if (stack.isStackEmpty()) {
+        println(output)
+    }   else println("Invalid expression")
     return true
+}
+fun String.toVariableOrInt(): BigInteger? {
+    var sign = BigInteger.ONE
+    val positive = if (this[0] == '-') {
+        sign = -sign
+        this.drop(1)
+    } else this
+    val output = when {
+        positive in variables.keys -> variables[positive]?.times(sign)
+        positive.isVarName() -> {
+            println("Unknown Variable")
+            return null
+        }
+        else -> positive.toBigIntegerOrNull()?.times(sign)
+    }
+    if (output == null) println("Invalid expression")
+    return output
+}
+
+fun String.binaryOperation(a: String, b: String): BigInteger? {
+    val bInt = b.toVariableOrInt() ?: return null
+    if (this == "=") {
+        if (a.isVarName()) { variables[a] = bInt
+        } else { println("Invalid variable name")}
+        return null
+    }
+    val aInt = a.toVariableOrInt() ?: return null
+    return when (this) {
+        "+" -> aInt + bInt
+        "*" -> aInt * bInt
+        "/" -> aInt / bInt
+        "^" -> Array<BigInteger>(bInt.toInt()) {aInt}.fold(BigInteger.ONE) { acc, i -> acc * i }
+        else -> {println("Invalid expression"); null}
+    }
 }
 
 
